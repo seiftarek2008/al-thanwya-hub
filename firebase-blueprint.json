@@ -1,0 +1,59 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account registration and study state data",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name of the student"
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address"
+        },
+        "passwordHash": {
+          "type": "string",
+          "description": "Hashed password using SHA-256"
+        },
+        "stream": {
+          "type": "string",
+          "enum": ["math", "science", "literature"],
+          "description": "Thanaweya Amma field of study"
+        },
+        "targetPercentage": {
+          "type": "number",
+          "description": "Target percentage score"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp ISO string"
+        },
+        "phone": {
+          "type": "string",
+          "description": "WhatsApp contact phone number"
+        },
+        "whatsappReminders": {
+          "type": "boolean",
+          "description": "Whether WhatsApp reminders are enabled"
+        },
+        "data": {
+          "type": "object",
+          "description": "Full serialized user study planner state"
+        }
+      },
+      "required": ["id", "name", "email", "passwordHash", "stream", "targetPercentage", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{email}": {
+      "schema": "User",
+      "description": "Stores all user profiles and study progress indexed by email"
+    }
+  }
+}

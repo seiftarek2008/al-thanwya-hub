@@ -13,7 +13,8 @@ import {
   Activity,
   Brain,
   Coffee,
-  Volume2
+  Volume2,
+  Edit2
 } from 'lucide-react';
 import { PlannerActivity, Subject } from '../types';
 
@@ -22,6 +23,7 @@ interface WeeklyPlannerProps {
   subjects: Subject[];
   onAddActivity: (activity: Omit<PlannerActivity, 'id'>) => void;
   onDeleteActivity: (id: string) => void;
+  onUpdateActivity: (activity: PlannerActivity) => void;
   onOptimizeSchedule: (optimizedList: PlannerActivity[]) => void;
 }
 
@@ -51,6 +53,7 @@ export default function WeeklyPlanner({
   subjects, 
   onAddActivity, 
   onDeleteActivity, 
+  onUpdateActivity,
   onOptimizeSchedule 
 }: WeeklyPlannerProps) {
   
@@ -64,6 +67,9 @@ export default function WeeklyPlanner({
   const [subjectId, setSubjectId] = useState(subjects[0]?.id || '');
   const [reminder, setReminder] = useState(true);
 
+  // Edit State
+  const [editingActivity, setEditingActivity] = useState<PlannerActivity | null>(null);
+
   // Filter State
   const [selectedDayFilter, setSelectedDayFilter] = useState<number>(-1); // -1 means show all
   const [isOptimizing, setIsOptimizing] = useState(false);
@@ -76,6 +82,13 @@ export default function WeeklyPlanner({
     });
     return map;
   }, [subjects]);
+
+  const handleUpdateSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingActivity || !editingActivity.title.trim() || !editingActivity.startTime || !editingActivity.endTime) return;
+    onUpdateActivity(editingActivity);
+    setEditingActivity(null);
+  };
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -270,18 +283,33 @@ export default function WeeklyPlanner({
             </p>
           </div>
 
-          <button
-            onClick={handleAIOptimize}
-            disabled={isOptimizing}
-            className="py-2.5 px-4 bg-zinc-950 dark:bg-zinc-100 text-zinc-50 dark:text-zinc-950 text-xs font-semibold rounded-xl hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
-          >
-            {isOptimizing ? (
-              <span className="w-4 h-4 rounded-full border-2 border-zinc-400 border-t-zinc-100 animate-spin"></span>
-            ) : (
-              <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
-            )}
-            <span>تحسين الجدول بذكاء الأعصاب (AI Schedule Optimizer)</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleAIOptimize}
+              disabled={isOptimizing}
+              className="py-2.5 px-4 bg-zinc-950 dark:bg-zinc-100 text-zinc-50 dark:text-zinc-950 text-xs font-semibold rounded-xl hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 cursor-pointer"
+            >
+              {isOptimizing ? (
+                <span className="w-4 h-4 rounded-full border-2 border-zinc-400 border-t-zinc-100 animate-spin"></span>
+              ) : (
+                <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
+              )}
+              <span>تحسين الجدول بذكاء الأعصاب (AI Schedule Optimizer)</span>
+            </button>
+
+            <button
+              onClick={() => {
+                if (window.confirm('هل أنت متأكد من مسح جميع المهام المجدولة لهذا الأسبوع؟')) {
+                  onOptimizeSchedule([]);
+                }
+              }}
+              className="py-2.5 px-4 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 text-xs font-semibold rounded-xl border border-red-100 dark:border-red-900/30 transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+              title="مسح كل جدول الأسبوع"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>مسح كل جدول الأسبوع</span>
+            </button>
+          </div>
         </div>
 
         {optimizationSuccess && (
@@ -495,13 +523,22 @@ export default function WeeklyPlanner({
                             key={act.id}
                             className={`p-3.5 rounded-2xl border flex flex-col justify-between gap-3 group relative transition-all duration-300 hover:shadow-md ${catConfig.color}`}
                           >
-                            <button
-                              onClick={() => onDeleteActivity(act.id)}
-                              className="absolute left-2.5 top-2.5 p-1.5 text-zinc-400 hover:text-red-500 bg-zinc-100 dark:bg-zinc-950 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                              title="حذف الموعد"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="absolute left-2 top-2 flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all duration-200">
+                              <button
+                                onClick={() => setEditingActivity(act)}
+                                className="p-1.5 text-zinc-600 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 bg-white/95 dark:bg-zinc-950/95 border border-zinc-200/80 dark:border-zinc-850 rounded-lg shadow-xs hover:shadow-sm transition-all cursor-pointer"
+                                title="تعديل الموعد"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => onDeleteActivity(act.id)}
+                                className="p-1.5 text-zinc-600 dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-400 bg-white/95 dark:bg-zinc-950/95 border border-zinc-200/80 dark:border-zinc-850 rounded-lg shadow-xs hover:shadow-sm transition-all cursor-pointer"
+                                title="حذف الموعد"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
 
                             <div className="space-y-1 pr-1.5 text-right">
                               <span className="text-[9px] uppercase tracking-wider font-bold block opacity-75">
@@ -546,6 +583,158 @@ export default function WeeklyPlanner({
         </div>
 
       </div>
+
+      {/* Edit Activity Modal */}
+      {editingActivity && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs" style={{ direction: 'rtl' }}>
+          <div className="w-full max-w-md p-6 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+                <Edit2 className="w-4.5 h-4.5 text-zinc-550" />
+                <span>تعديل النشاط الأسبوعي</span>
+              </h3>
+              <button 
+                onClick={() => setEditingActivity(null)}
+                className="text-zinc-400 hover:text-zinc-650 dark:hover:text-zinc-200 text-xs font-bold font-sans cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateSubmit} className="space-y-4 text-right">
+              <div>
+                <label className="block text-xs text-zinc-500 mb-1">اسم النشاط أو الدرس:</label>
+                <input
+                  type="text"
+                  required
+                  value={editingActivity.title}
+                  onChange={(e) => setEditingActivity({ ...editingActivity, title: e.target.value })}
+                  className="w-full px-3 py-2 text-xs border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 rounded-xl focus:outline-none focus:ring-1 focus:ring-zinc-400 text-zinc-900 dark:text-zinc-100"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-xs text-zinc-500 mb-1">اليوم:</label>
+                  <select
+                    value={editingActivity.dayOfWeek}
+                    onChange={(e) => setEditingActivity({ ...editingActivity, dayOfWeek: Number(e.target.value) })}
+                    className="w-full px-3 py-2 text-xs border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 rounded-xl focus:outline-none focus:ring-1 focus:ring-zinc-400 text-zinc-900 dark:text-zinc-100"
+                  >
+                    {DAYS_ARABIC.map((day, idx) => (
+                      <option key={idx} value={idx}>{day.split(' (')[0]}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs text-zinc-500 mb-1">التصنيف:</label>
+                  <select
+                    value={editingActivity.category}
+                    onChange={(e) => {
+                      const newCat = e.target.value as any;
+                      const updates: Partial<PlannerActivity> = { category: newCat };
+                      if (newCat !== 'Study' && newCat !== 'Revision' && newCat !== 'Homework' && newCat !== 'Exam') {
+                        updates.subjectId = undefined;
+                      } else if (!editingActivity.subjectId) {
+                        updates.subjectId = subjects[0]?.id;
+                      }
+                      setEditingActivity({ ...editingActivity, ...updates });
+                    }}
+                    className="w-full px-3 py-2 text-xs border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 rounded-xl focus:outline-none focus:ring-1 focus:ring-zinc-400 text-zinc-900 dark:text-zinc-100"
+                  >
+                    {CATEGORIES.map((cat) => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {(editingActivity.category === 'Study' || editingActivity.category === 'Revision' || editingActivity.category === 'Homework' || editingActivity.category === 'Exam') && (
+                <div>
+                  <label className="block text-xs text-zinc-500 mb-1">المادة المرتبطة:</label>
+                  <select
+                    value={editingActivity.subjectId || ''}
+                    onChange={(e) => setEditingActivity({ ...editingActivity, subjectId: e.target.value })}
+                    className="w-full px-3 py-2 text-xs border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 rounded-xl focus:outline-none focus:ring-1 focus:ring-zinc-400 text-zinc-900 dark:text-zinc-100"
+                  >
+                    {subjects.map((sub) => (
+                      <option key={sub.id} value={sub.id}>{sub.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-xs text-zinc-500 mb-1">وقت البدء:</label>
+                  <input
+                    type="time"
+                    required
+                    value={editingActivity.startTime}
+                    onChange={(e) => setEditingActivity({ ...editingActivity, startTime: e.target.value })}
+                    className="w-full px-3 py-2 text-xs border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 rounded-xl focus:outline-none focus:ring-1 focus:ring-zinc-400 text-zinc-900 dark:text-zinc-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-zinc-500 mb-1">وقت الانتهاء:</label>
+                  <input
+                    type="time"
+                    required
+                    value={editingActivity.endTime}
+                    onChange={(e) => setEditingActivity({ ...editingActivity, endTime: e.target.value })}
+                    className="w-full px-3 py-2 text-xs border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 rounded-xl focus:outline-none focus:ring-1 focus:ring-zinc-400 text-zinc-900 dark:text-zinc-100"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-xs text-zinc-500 mb-1">الأولية:</label>
+                  <select
+                    value={editingActivity.priority}
+                    onChange={(e) => setEditingActivity({ ...editingActivity, priority: e.target.value as any })}
+                    className="w-full px-3 py-2 text-xs border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 rounded-xl focus:outline-none focus:ring-1 focus:ring-zinc-400 text-zinc-900 dark:text-zinc-100"
+                  >
+                    <option value="high">أهمية قصوى (مهم وعاجل)</option>
+                    <option value="medium">أهمية متوسطة</option>
+                    <option value="low">أهمية منخفضة</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2 pt-5">
+                  <input
+                    type="checkbox"
+                    id="edit-reminder-chk"
+                    checked={editingActivity.reminder}
+                    onChange={(e) => setEditingActivity({ ...editingActivity, reminder: e.target.checked })}
+                    className="w-4 h-4 rounded text-zinc-900 focus:ring-zinc-900 border-zinc-300 dark:border-zinc-700 font-sans"
+                  />
+                  <label htmlFor="edit-reminder-chk" className="text-xs text-zinc-600 dark:text-zinc-400 cursor-pointer">تنبيه بالبريد/تطبيق</label>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-zinc-900 dark:bg-zinc-50 hover:bg-zinc-800 dark:hover:bg-zinc-200 text-zinc-50 dark:text-zinc-950 text-xs font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>حفظ التعديلات</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingActivity(null)}
+                  className="flex-1 py-2.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                >
+                  <span>إلغاء</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );

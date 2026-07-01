@@ -4,13 +4,26 @@
  */
 
 import React, { useState } from 'react';
-import { Settings, Save, Download, Key, Shield, User, Bell } from 'lucide-react';
+import { Settings, Save, Download, Key, Shield, User, Bell, Phone } from 'lucide-react';
 import { AppStudyState } from '../types';
 
 interface SettingsPanelProps {
-  user: { name: string; email: string; stream: 'math' | 'science' | 'literature'; targetPercentage: number };
+  user: { 
+    name: string; 
+    email: string; 
+    stream: 'math' | 'science' | 'literature'; 
+    targetPercentage: number;
+    phone?: string;
+    whatsappReminders?: boolean;
+  };
   appData: AppStudyState;
-  onUpdateProfile: (profile: { name: string; stream: 'math' | 'science' | 'literature'; targetPercentage: number }) => void;
+  onUpdateProfile: (profile: { 
+    name: string; 
+    stream: 'math' | 'science' | 'literature'; 
+    targetPercentage: number;
+    phone?: string;
+    whatsappReminders?: boolean;
+  }) => void;
   onUpdatePassword: (password: string) => Promise<boolean>;
   onImportData: (data: AppStudyState) => void;
 }
@@ -19,6 +32,8 @@ export default function SettingsPanel({ user, appData, onUpdateProfile, onUpdate
   const [name, setName] = useState(user.name);
   const [stream, setStream] = useState<'math' | 'science' | 'literature'>(user.stream);
   const [targetPercentage, setTargetPercentage] = useState(user.targetPercentage);
+  const [phone, setPhone] = useState(user.phone || '');
+  const [whatsappReminders, setWhatsappReminders] = useState(!!user.whatsappReminders);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordStatus, setPasswordStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -28,7 +43,7 @@ export default function SettingsPanel({ user, appData, onUpdateProfile, onUpdate
 
   const handleProfileSave = (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdateProfile({ name, stream, targetPercentage });
+    onUpdateProfile({ name, stream, targetPercentage, phone, whatsappReminders });
     setProfileStatus('success');
     setTimeout(() => setProfileStatus('idle'), 3000);
   };
@@ -146,6 +161,46 @@ export default function SettingsPanel({ user, appData, onUpdateProfile, onUpdate
                 onChange={(e) => setTargetPercentage(Number(e.target.value))}
                 className="w-full px-3 py-2 text-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 rounded-xl focus:outline-none text-zinc-950 dark:text-zinc-50"
               />
+            </div>
+
+            <div>
+              <label className="block text-xs text-zinc-500 mb-1.5">رقم الواتساب الخاص بك (تلقي التذكيرات):</label>
+              <div className="relative">
+                <input
+                  type="tel"
+                  placeholder="مثال: 01012345678"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full pl-3 pr-9 py-2 text-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 rounded-xl focus:outline-none text-zinc-950 dark:text-zinc-50 font-mono"
+                />
+                <Phone className="w-4 h-4 text-zinc-400 absolute right-3 top-3" />
+              </div>
+            </div>
+
+            {/* Custom Premium Toggle Switch */}
+            <div className="flex items-center justify-between p-3 rounded-xl border border-zinc-150 dark:border-zinc-850 bg-zinc-50/50 dark:bg-zinc-900/30">
+              <div className="space-y-0.5">
+                <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">
+                  تفعيل إشعارات التذكير عبر الواتساب
+                </label>
+                <span className="text-[10px] text-zinc-400 block leading-normal">
+                  ربط الجدول الأسبوعي بإرسال رسائل تذكير تلقائية دقيقة على رقمك.
+                </span>
+              </div>
+              
+              <button
+                type="button"
+                onClick={() => setWhatsappReminders(!whatsappReminders)}
+                className={`relative inline-flex h-6.5 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-1 focus:ring-zinc-400 ${
+                  whatsappReminders ? 'bg-emerald-600' : 'bg-zinc-250 dark:bg-zinc-800'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5.5 w-5.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    whatsappReminders ? '-translate-x-5.5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
             </div>
 
             <div className="flex items-center justify-between pt-2">

@@ -50,6 +50,8 @@ interface UserRecord {
   stream: 'math' | 'science' | 'literature';
   targetPercentage: number;
   createdAt: string;
+  phone?: string;
+  whatsappReminders?: boolean;
   data?: any; // The main study state
 }
 
@@ -80,7 +82,7 @@ async function saveLocalDb(dbData: DatabaseStore): Promise<void> {
 }
 
 // Initialize Firebase App & Firestore
-let firebaseApp: any = null;
+let fbApp: any = null;
 let firestoreDb: any = null;
 
 async function initFirebase() {
@@ -93,9 +95,9 @@ async function initFirebase() {
     const { initializeApp: fbInitializeApp } = await import('firebase/app');
     const { getFirestore: fbGetFirestore } = await import('firebase/firestore');
     
-    firebaseApp = fbInitializeApp(firebaseConfig);
-    firestoreDb = fbGetFirestore(firebaseApp);
-    console.log('Firebase Cloud Firestore successfully initialized on the server!');
+    fbApp = fbInitializeApp(firebaseConfig);
+    firestoreDb = fbGetFirestore(fbApp, firebaseConfig.firestoreDatabaseId || '(default)');
+    console.log('Firebase Cloud Firestore Web Client SDK successfully initialized on the server with database ID:', firebaseConfig.firestoreDatabaseId);
   } catch (err) {
     console.error('Firebase config loading failed or not set up yet. Using local fallback.', err);
   }
@@ -109,8 +111,8 @@ async function getUser(email: string): Promise<UserRecord | null> {
   if (firestoreDb) {
     try {
       const { doc, getDoc } = await import('firebase/firestore');
-      const userDocRef = doc(firestoreDb, 'users', emailLower);
-      const userSnapshot = await getDoc(userDocRef);
+      const docRef = doc(firestoreDb, 'users', emailLower);
+      const userSnapshot = await getDoc(docRef);
       if (userSnapshot.exists()) {
         return userSnapshot.data() as UserRecord;
       }
@@ -139,8 +141,8 @@ async function saveUser(email: string, userRecord: UserRecord): Promise<void> {
   if (firestoreDb) {
     try {
       const { doc, setDoc } = await import('firebase/firestore');
-      const userDocRef = doc(firestoreDb, 'users', emailLower);
-      await setDoc(userDocRef, userRecord);
+      const docRef = doc(firestoreDb, 'users', emailLower);
+      await setDoc(docRef, userRecord);
       console.log(`Successfully synced user ${emailLower} to Cloud Firestore.`);
     } catch (err) {
       console.error(`Failed to save user ${emailLower} to Firestore:`, err);
@@ -519,7 +521,7 @@ app.get('/api/study/data', authenticateUser, async (req, res) => {
 // Endpoint: Update User Profile
 app.post('/api/user/update-profile', authenticateUser, async (req, res) => {
   try {
-    const { name, stream, targetPercentage } = req.body;
+    const { name, stream, targetPercentage, phone, whatsappReminders } = req.body;
     if (!name || !stream || !targetPercentage) {
       return res.status(400).json({ error: 'Missing profile fields' });
     }
@@ -533,6 +535,12 @@ app.post('/api/user/update-profile', authenticateUser, async (req, res) => {
     user.name = name;
     user.stream = stream;
     user.targetPercentage = Number(targetPercentage);
+    if (phone !== undefined) {
+      user.phone = phone;
+    }
+    if (whatsappReminders !== undefined) {
+      user.whatsappReminders = !!whatsappReminders;
+    }
     await saveUser(emailLower, user);
 
     res.json({ 
@@ -542,7 +550,9 @@ app.post('/api/user/update-profile', authenticateUser, async (req, res) => {
         name: user.name, 
         email: user.email, 
         stream: user.stream, 
-        targetPercentage: user.targetPercentage 
+        targetPercentage: user.targetPercentage,
+        phone: user.phone,
+        whatsappReminders: user.whatsappReminders
       } 
     });
   } catch (error) {
@@ -550,6 +560,9 @@ app.post('/api/user/update-profile', authenticateUser, async (req, res) => {
     res.status(500).json({ error: 'Server error during profile update' });
   }
 });
+
+// In-memory store for simulated WhatsApp notification events
+const whatsappLogs: Array<{ id: string; email: string; phone: string; message: string; timestamp: string; status: 'sent' | 'failed' }> = [];
 
 // Endpoint: Save Study Data
 app.post('/api/study/save', authenticateUser, async (req, res) => {
@@ -575,6 +588,143 @@ app.post('/api/study/save', authenticateUser, async (req, res) => {
     res.status(500).json({ error: 'Server error during save' });
   }
 });
+
+// Endpoint: Get WhatsApp Notification Logs
+app.get('/api/whatsapp/logs', authenticateUser, (req, res) => {
+  const emailLower = req.user!.email;
+  const userLogs = whatsappLogs.filter(l => l.email === emailLower);
+  res.json({ logs: userLogs });
+});
+
+// Endpoint: Test WhatsApp notification send
+app.post('/api/whatsapp/test-send', authenticateUser, async (req, res) => {
+  try {
+    const { phone, message } = req.body;
+    if (!phone || !message) {
+      return res.status(400).json({ error: 'Phone number and message are required' });
+    }
+
+    const emailLower = req.user!.email;
+    
+    // Simulate real dispatching & log it
+    const newLog = {
+      id: 'notif_manual_' + Math.random().toString(36).substring(2, 9),
+      email: emailLower,
+      phone,
+      message,
+      timestamp: new Date().toISOString(),
+      status: 'sent' as const
+    };
+    
+    whatsappLogs.unshift(newLog);
+    console.log(`[WhatsApp Reminder Dispatch] Simulated manual send to ${phone}: ${message}`);
+    
+    res.json({ success: true, log: newLog });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to send test WhatsApp message' });
+  }
+});
+
+// Endpoint: Simulate instant auto-send of all activities
+app.post('/api/whatsapp/simulate-auto-all', authenticateUser, async (req, res) => {
+  try {
+    const db = await loadLocalDb();
+    if (!db || !db.users) {
+      return res.status(500).json({ error: 'Database not available' });
+    }
+    const emailLower = req.user!.email;
+    const user = db.users[emailLower];
+    if (!user || !user.phone || !user.data || !Array.isArray(user.data.plannerActivities)) {
+      return res.status(400).json({ error: 'User does not have a phone number or planner activities set up yet.' });
+    }
+
+    const activities = user.data.plannerActivities;
+    if (activities.length === 0) {
+      return res.status(400).json({ error: 'لا يوجد مهام مجدولة هذا الأسبوع لمحاكاتها!' });
+    }
+
+    // Generate simulated auto messages for each activity
+    let count = 0;
+    const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    activities.forEach(act => {
+      const dayName = days[act.dayOfWeek] || 'اليوم المجدول';
+      const message = `🔔 [تنبيه تلقائي ذكي] تذكير منصة الثانوية العامة: حان الآن موعد ${act.title} يوم (${dayName}) من الساعة ${act.startTime} حتى ${act.endTime}. تذكر أن عقلنا البشري ينمو بالمثابرة والتركيز الفعال! 💪✨`;
+      
+      // Push to logs
+      whatsappLogs.unshift({
+        id: 'notif_sim_auto_' + Math.random().toString(36).substring(2, 9),
+        email: emailLower,
+        phone: user.phone!,
+        message,
+        timestamp: new Date().toISOString(),
+        status: 'sent'
+      });
+      count++;
+    });
+
+    if (whatsappLogs.length > 200) {
+      whatsappLogs.splice(150);
+    }
+
+    res.json({ success: true, count });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to simulate automatic sends' });
+  }
+});
+
+// Background Cron: Check every 60 seconds for upcoming planner activities
+setInterval(async () => {
+  try {
+    const db = await loadLocalDb();
+    if (!db || !db.users) return;
+    
+    const emails = Object.keys(db.users);
+    
+    // Get current time in Egypt timezone (Africa/Cairo) since the curriculum is designed for Egyptian students
+    const now = new Date();
+    const egyptTimeStr = now.toLocaleString("en-US", { timeZone: "Africa/Cairo" });
+    const egyptDate = new Date(egyptTimeStr);
+    
+    const currentDay = egyptDate.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    const currentHour = egyptDate.getHours().toString().padStart(2, '0');
+    const currentMin = egyptDate.getMinutes().toString().padStart(2, '0');
+    const currentTimeStr = `${currentHour}:${currentMin}`;
+
+    for (const email of emails) {
+      const user = db.users[email];
+      if (user && user.phone && user.whatsappReminders && user.data && Array.isArray(user.data.plannerActivities)) {
+        const activities = user.data.plannerActivities;
+        for (const act of activities) {
+          // Check if it's the right day of the week and if the start time matches now
+          if (act.dayOfWeek === currentDay && act.startTime === currentTimeStr) {
+            const message = `🔔 تذكير من منصة الثانوية العامة لعام 2027: حان الآن موعد ${act.title} (${act.startTime} - ${act.endTime}). لا تضيع الوقت يا بطل! 💪✨`;
+            
+            // Check if we already logged this in the last few minutes to avoid double triggers
+            const duplicate = whatsappLogs.find(l => l.email === user.email && l.phone === user.phone && l.message === message && (Date.now() - new Date(l.timestamp).getTime()) < 120000);
+            
+            if (!duplicate) {
+              whatsappLogs.unshift({
+                id: 'notif_auto_' + Math.random().toString(36).substring(2, 9),
+                email: user.email,
+                phone: user.phone,
+                message,
+                timestamp: new Date().toISOString(),
+                status: 'sent'
+              });
+              console.log(`[WhatsApp Reminder Background Engine] Sent automatically to ${user.phone} in Egypt local time: ${message}`);
+            }
+          }
+        }
+      }
+    }
+
+    if (whatsappLogs.length > 200) {
+      whatsappLogs.splice(150);
+    }
+  } catch (err) {
+    console.error('Error in background WhatsApp scheduler checker:', err);
+  }
+}, 60000);
 
 // Endpoint: AI Study Assistant Coach
 app.post('/api/ai/chat', authenticateUser, async (req, res) => {

@@ -5,16 +5,19 @@
 
 import React, { useMemo } from 'react';
 import { Clock, Flame, CheckCircle, Award, Brain, AlertTriangle, Zap, ArrowUpRight } from 'lucide-react';
-import { Subject, StudySession, Task } from '../types';
+import { Subject, StudySession, Task, Exam, GradeRecord } from '../types';
+import CustomChartBuilder from './CustomChartBuilder';
 
 interface StatsDashboardProps {
   subjects: Subject[];
   sessions: StudySession[];
   tasks: Task[];
   streak: number;
+  exams?: Exam[];
+  grades?: GradeRecord[];
 }
 
-export default function StatsDashboard({ subjects, sessions, tasks, streak }: StatsDashboardProps) {
+export default function StatsDashboard({ subjects, sessions, tasks, streak, exams = [], grades = [] }: StatsDashboardProps) {
   // 1. Calculate general stats
   const totalStudyMinutes = useMemo(() => {
     return sessions.reduce((acc, s) => acc + s.duration, 0) / 60;
@@ -109,6 +112,191 @@ export default function StatsDashboard({ subjects, sessions, tasks, streak }: St
     return 'low';
   }, [studyHoursToday]);
 
+  // Weekly comparison calculations (This Week vs. Last Week)
+  const comparisonStats = useMemo(() => {
+    const today = new Date();
+    
+    // This week: last 7 days (today is Day 0, we look at Day 0 to Day 6)
+    const thisWeekStart = new Date();
+    thisWeekStart.setDate(today.getDate() - 7);
+    thisWeekStart.setHours(0, 0, 0, 0);
+
+    // Last week: Day 7 to Day 13
+    const lastWeekStart = new Date();
+    lastWeekStart.setDate(today.getDate() - 14);
+    lastWeekStart.setHours(0, 0, 0, 0);
+
+    // 1. Study hours
+    const hoursThisWeek = sessions
+      .filter((s) => new Date(s.timestamp) >= thisWeekStart)
+      .reduce((acc, s) => acc + s.duration, 0) / 3600;
+
+    const hoursLastWeek = sessions
+      .filter((s) => {
+        const d = new Date(s.timestamp);
+        return d >= lastWeekStart && d < thisWeekStart;
+      })
+      .reduce((acc, s) => acc + s.duration, 0) / 3600;
+
+    // 2. Completed tasks
+    const tasksThisWeek = tasks.filter((t) => {
+      if (t.status !== 'done' || !t.completedAt) return false;
+      return new Date(t.completedAt) >= thisWeekStart;
+    }).length;
+
+    const tasksLastWeek = tasks.filter((t) => {
+      if (t.status !== 'done' || !t.completedAt) return false;
+      const d = new Date(t.completedAt);
+      return d >= lastWeekStart && d < thisWeekStart;
+    }).length;
+
+    // 3. Average Focus Score
+    const sessionsThisWeek = sessions.filter((s) => new Date(s.timestamp) >= thisWeekStart);
+    const avgFocusThisWeek = sessionsThisWeek.length > 0
+      ? sessionsThisWeek.reduce((acc, s) => acc + s.focusScore, 0) / sessionsThisWeek.length
+      : 0;
+
+    const sessionsLastWeek = sessions.filter((s) => {
+      const d = new Date(s.timestamp);
+      return d >= lastWeekStart && d < thisWeekStart;
+    });
+    const avgFocusLastWeek = sessionsLastWeek.length > 0
+      ? sessionsLastWeek.reduce((acc, s) => acc + s.focusScore, 0) / sessionsLastWeek.length
+      : 0;
+
+    // 4. Grades Performance (Percent average)
+    const getPercent = (score: number, total: number) => (score / total) * 100;
+    
+    const scoresThisWeek: number[] = [];
+    grades.forEach((g) => {
+      if (new Date(g.date) >= thisWeekStart) {
+        scoresThisWeek.push(getPercent(g.score, g.totalScore));
+      }
+    });
+    exams.forEach((e) => {
+      if (e.score !== undefined && new Date(e.date) >= thisWeekStart) {
+        scoresThisWeek.push(getPercent(e.score, e.totalScore));
+      }
+    });
+    const avgGradeThisWeek = scoresThisWeek.length > 0
+      ? scoresThisWeek.reduce((acc, v) => acc + v, 0) / scoresThisWeek.length
+      : 0;
+
+    const scoresLastWeek: number[] = [];
+    grades.forEach((g) => {
+      const d = new Date(g.date);
+      if (d >= lastWeekStart && d < thisWeekStart) {
+        scoresLastWeek.push(getPercent(g.score, g.totalScore));
+      }
+    });
+    exams.forEach((e) => {
+      if (e.score !== undefined) {
+        const d = new Date(e.date);
+        if (d >= lastWeekStart && d < thisWeekStart) {
+          scoresLastWeek.push(getPercent(e.score, e.totalScore));
+        }
+      }
+    });
+    const avgGradeLastWeek = scoresLastWeek.length > 0
+      ? scoresLastWeek.reduce((acc, v) => acc + v, 0) / scoresLastWeek.length
+      : 0;
+
+    return {
+      hoursThisWeek,
+      hoursLastWeek,
+      tasksThisWeek,
+      tasksLastWeek,
+      focusThisWeek: avgFocusThisWeek,
+      focusLastWeek: avgFocusLastWeek,
+      gradeThisWeek: avgGradeThisWeek,
+      gradeLastWeek: avgGradeLastWeek
+    };
+  }, [sessions, tasks, grades, exams]);
+
+  const getNeuroscienceAdvisorText = (stats: typeof comparisonStats) => {
+    const hoursDiff = stats.hoursThisWeek - stats.hoursLastWeek;
+    const gradeDiff = stats.gradeThisWeek - stats.gradeLastWeek;
+
+    if (stats.hoursThisWeek === 0 && stats.hoursLastWeek === 0) {
+      return "لم نلاحظ وجود أي جلسات مذاكرة مسجلة حتى الآن يا بطل! ابدأ اليوم أولى جلسات المذاكرة العميقة لتفعيل روابط قشرة الدماغ الجبهية وتنمية مستواك العصبي.";
+    }
+
+    let advise = "";
+    if (hoursDiff > 0) {
+      advise += "📈 رائع جداً! لقد زادت ساعات مذاكرتك هذا الأسبوع مقارنة بالأسبوع الماضي، مما يعني زيادة المران العقلي وقوة التركيز العصبي. ";
+    } else if (hoursDiff < 0) {
+      advise += "⚠️ انتبه يا بطل، تراجعت ساعات المذاكرة هذا الأسبوع مقارنة بالأسبوع الماضي. قد تشعر ببعض التعب أو الإجهاد مؤقتاً؛ ننصحك بتبسيط فترات الدراسة واستخدام جلسات طماطم (Pomodoro) قصيرة لاستعادة شغفك. ";
+    } else {
+      advise += "➖ أداؤك الزمني مستقر وثابت هذا الأسبوع مقارنة بالأسبوع السابق. الاستمرارية هي مفتاح التفوق في الثانوية العامة! ";
+    }
+
+    if (gradeDiff > 0) {
+      advise += "🌟 مستواك التحصيلي في تصاعد مستمر! ارتفاع درجات الاختبارات والتقييمات يدل على أن آليات الاسترجاع النشط والتكرار المتباعد تعمل بكفاءة تامة وتتحول إلى ذاكرة طويلة المدى.";
+    } else if (gradeDiff < 0) {
+      advise += "🔍 مستويات الاختبارات تراجعت قليلاً مقارنة بالأسبوع الماضي. لا تقلق، الاختبارات وسيلة لتحديد الفجوات المعرفية؛ ركّز في الأسبوع القادم على مراجعة الأخطاء وحل أسئلة أكثر قبل الدخول للاختبار.";
+    } else {
+      advise += "👍 مستواك في حل الأسئلة والتقييمات مستقر تماماً. استمر في رصد الدرجات لتقوية ثقتك وقدرتك على التذكر تحت الضغط المعتدل.";
+    }
+
+    return advise;
+  };
+
+  const renderComparisonCard = (
+    title: string,
+    currentValue: number,
+    previousValue: number,
+    unit: string,
+    isPercentage: boolean = false
+  ) => {
+    const difference = currentValue - previousValue;
+    const isImprovement = difference > 0;
+    const isDecline = difference < 0;
+    
+    // Percent change
+    let percentChange = 0;
+    if (previousValue > 0) {
+      percentChange = Math.round((difference / previousValue) * 100);
+    } else if (currentValue > 0) {
+      percentChange = 100;
+    }
+
+    return (
+      <div className="p-4 rounded-2xl border border-zinc-150 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-900/45 flex flex-col justify-between">
+        <div className="text-right">
+          <span className="text-[11px] font-bold text-zinc-400 block">{title}</span>
+          <div className="mt-2 flex items-baseline gap-1">
+            <h4 className="text-xl font-bold font-mono text-zinc-900 dark:text-zinc-50">
+              {isPercentage ? `${currentValue.toFixed(0)}${unit}` : `${currentValue.toFixed(1)} ${unit}`}
+            </h4>
+            <span className="text-[10px] text-zinc-450 dark:text-zinc-500 mr-1.5 font-bold">
+              السابق: {isPercentage ? `${previousValue.toFixed(0)}${unit}` : `${previousValue.toFixed(1)} ${unit}`}
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-3 pt-2 flex items-center justify-between border-t border-zinc-150/50 dark:border-zinc-800/50">
+          <span className="text-[9px] text-zinc-400">التغير الأسبوعي:</span>
+          {difference === 0 ? (
+            <span className="text-[10px] font-bold text-zinc-500 flex items-center gap-0.5">
+              <span>ثابت</span>
+              <span>➖</span>
+            </span>
+          ) : isImprovement ? (
+            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5" style={{ direction: 'ltr' }}>
+              <span>+{isPercentage ? `${difference.toFixed(0)}${unit}` : `${difference.toFixed(1)}${unit}`} (+{percentChange}%)</span>
+              <span>📈</span>
+            </span>
+          ) : (
+            <span className="text-[10px] font-bold text-red-600 dark:text-red-400 flex items-center gap-0.5" style={{ direction: 'ltr' }}>
+              <span>{isPercentage ? `${difference.toFixed(0)}${unit}` : `${difference.toFixed(1)}${unit}`} ({percentChange}%)</span>
+              <span>📉</span>
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6 text-right" style={{ direction: 'rtl' }}>
       {/* Metrics Row */}
@@ -179,6 +367,76 @@ export default function StatsDashboard({ subjects, sessions, tasks, streak }: St
           </div>
         </div>
       </div>
+
+      {/* Weekly Level Progress and Comparison Section */}
+      <div className="p-6 rounded-3xl border border-zinc-200 dark:border-zinc-850 bg-white dark:bg-zinc-900 shadow-sm space-y-4">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 border-b border-zinc-100 dark:border-zinc-800 pb-3">
+          <div className="space-y-1 text-right">
+            <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+              <ArrowUpRight className="w-5 h-5 text-emerald-500" />
+              <span>مقارنة مستواك الدراسي الأسبوعية (الأسبوع الحالي 🆚 الأسبوع السابق)</span>
+            </h3>
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">تحليل فوري دقيق يوضح مدى تطور الروابط العصبية واستجابة الخلايا للتحصيل الدراسي ومعدل إنجاز المهام.</p>
+          </div>
+          <span className="text-[10px] font-bold px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/35 text-emerald-600 dark:text-emerald-400 border border-emerald-100/30">
+            مقارنة مستوى الأسبوع
+          </span>
+        </div>
+
+        {/* Bento Grid Comparisons */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-right">
+          {renderComparisonCard(
+            "ساعات المذاكرة المنجزة",
+            comparisonStats.hoursThisWeek,
+            comparisonStats.hoursLastWeek,
+            "ساعة"
+          )}
+
+          {renderComparisonCard(
+            "المهام المنتهية",
+            comparisonStats.tasksThisWeek,
+            comparisonStats.tasksLastWeek,
+            "مهمة"
+          )}
+
+          {renderComparisonCard(
+            "متوسط درجة التركيز",
+            comparisonStats.focusThisWeek,
+            comparisonStats.focusLastWeek,
+            "%",
+            true
+          )}
+
+          {renderComparisonCard(
+            "مستوى التحصيل والدرجات",
+            comparisonStats.gradeThisWeek,
+            comparisonStats.gradeLastWeek,
+            "%",
+            true
+          )}
+        </div>
+
+        {/* Dynamic AI Advisor Panel */}
+        <div className="p-4 rounded-2xl border border-zinc-150/70 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/25 flex items-start gap-3">
+          <Brain className="w-5 h-5 text-amber-500 mt-0.5 shrink-0 animate-pulse" />
+          <div className="space-y-1 text-right">
+            <h5 className="text-xs font-bold text-zinc-800 dark:text-zinc-150 flex items-center gap-1.5">
+              <span>التحليل الإرشادي للأداء الأسبوعي 🧠</span>
+            </h5>
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+              {getNeuroscienceAdvisorText(comparisonStats)}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Custom Interactive Chart Builder Engine */}
+      <CustomChartBuilder 
+        subjects={subjects} 
+        sessions={sessions} 
+        exams={exams} 
+        grades={grades} 
+      />
 
       {/* Neuroscience Diagnostics Alerts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

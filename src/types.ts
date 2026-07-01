@@ -11,6 +11,8 @@ export interface User {
   targetPercentage: number;
   profilePicture?: string;
   createdAt: string;
+  phone?: string;
+  whatsappReminders?: boolean;
 }
 
 export interface Subject {
@@ -100,6 +102,10 @@ export interface PlannerActivity {
   category: 'Study' | 'Revision' | 'Homework' | 'Assignment' | 'Exam' | 'Health/Gym' | 'Family/Personal' | 'Free Time';
   subjectId?: string; // Optional linked subject
   reminder?: boolean;
+  completed?: boolean;
+  notes?: string;
+  gradeScore?: number;
+  gradeTotal?: number;
 }
 
 export interface SleepLog {

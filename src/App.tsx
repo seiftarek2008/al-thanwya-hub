@@ -25,10 +25,11 @@ import {
   Mail,
   UserPlus,
   Cloud,
-  Calendar
+  Calendar,
+  CalendarDays
 } from 'lucide-react';
 
-import { Subject, StudySession, Task, Goal, Exam, ChatMessage, NeuroscienceStats, AppStudyState } from './types';
+import { Subject, StudySession, Task, Goal, Exam, ChatMessage, NeuroscienceStats, AppStudyState, PlannerActivity } from './types';
 import Timer from './components/Timer';
 import AIChatbot from './components/AIChatbot';
 import StatsDashboard from './components/StatsDashboard';
@@ -39,6 +40,7 @@ import SettingsPanel from './components/SettingsPanel';
 import SubjectsManager from './components/SubjectsManager';
 import GoogleDrivePanel from './components/GoogleDrivePanel';
 import WeeklyPlanner from './components/WeeklyPlanner';
+import TodayTracker from './components/TodayTracker';
 
 const getDefaultSubjects = (stream: 'math' | 'science' | 'literature'): Subject[] => {
   if (stream === 'math') {
@@ -107,7 +109,7 @@ export default function App() {
   const [grades, setGrades] = useState<any[]>([]);
 
   // UI States
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'timer' | 'tasks' | 'subjects' | 'ai' | 'exams' | 'neuroscience' | 'settings' | 'drive' | 'planner'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'timer' | 'tasks' | 'subjects' | 'ai' | 'exams' | 'neuroscience' | 'settings' | 'drive' | 'planner' | 'today'>('today');
   const [isDarkMode, setIsDarkMode] = useState(localStorage.getItem('study_dark_mode') === 'true');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
@@ -263,7 +265,7 @@ export default function App() {
       if (res.ok) {
         localStorage.setItem('study_session_token', data.token);
         setToken(data.token);
-        setUser({ name: data.user.name, email: data.user.email, stream: data.user.stream, targetPercentage: data.user.targetPercentage });
+        setUser(data.user);
       } else {
         setAuthError(data.error || 'فشلت عملية التسجيل');
       }
@@ -285,7 +287,7 @@ export default function App() {
       if (res.ok) {
         localStorage.setItem('study_session_token', data.token);
         setToken(data.token);
-        setUser({ name: data.user.name, email: data.user.email, stream: data.user.stream, targetPercentage: data.user.targetPercentage });
+        setUser(data.user);
       } else {
         setAuthError(data.error || 'خطأ في البريد أو كلمة المرور');
       }
@@ -455,9 +457,25 @@ export default function App() {
     syncStateWithStorage({ plannerActivities: list });
   };
 
+  const handleUpdatePlannerActivity = (updatedActivity: PlannerActivity) => {
+    const list = plannerActivities.map((act) => act.id === updatedActivity.id ? updatedActivity : act);
+    setPlannerActivities(list);
+    syncStateWithStorage({ plannerActivities: list });
+  };
+
   const handleOptimizeSchedule = (optimizedList: any[]) => {
     setPlannerActivities(optimizedList);
     syncStateWithStorage({ plannerActivities: optimizedList });
+  };
+
+  const handleTogglePlannerActivityCompletion = (id: string, updates?: Partial<PlannerActivity>) => {
+    const list = plannerActivities.map((act) =>
+      act.id === id
+        ? { ...act, completed: !act.completed, ...updates }
+        : act
+    );
+    setPlannerActivities(list);
+    syncStateWithStorage({ plannerActivities: list });
   };
 
   // Complete study session from Timer
@@ -546,7 +564,7 @@ export default function App() {
     }
   };
 
-  const handleUpdateProfile = async (profile: { name: string; stream: 'math' | 'science' | 'literature'; targetPercentage: number }) => {
+  const handleUpdateProfile = async (profile: { name: string; stream: 'math' | 'science' | 'literature'; targetPercentage: number; phone?: string; whatsappReminders?: boolean }) => {
     try {
       const oldStream = user?.stream;
       setUser({ ...user!, ...profile });
@@ -907,6 +925,7 @@ export default function App() {
           {/* Nav Items */}
           <nav className="px-3 space-y-1">
             {[
+              { id: 'today', label: 'متابعة جدول اليوم والواتساب 📅', icon: CalendarDays },
               { id: 'dashboard', label: 'لوحة التحكم والمؤشرات', icon: LayoutDashboard },
               { id: 'timer', label: 'مؤقت التركيز الذكي', icon: TimerIcon },
               { id: 'planner', label: 'المنظم والجدول الأسبوعي', icon: Calendar },
@@ -994,12 +1013,25 @@ export default function App() {
 
         {/* Tab Canvas Content */}
         <main className="flex-1 overflow-y-auto p-6 md:p-8 max-w-5xl mx-auto w-full">
+          {activeTab === 'today' && user && (
+            <TodayTracker
+              user={user as any}
+              activities={plannerActivities}
+              subjects={subjects}
+              onToggleActivityCompletion={handleTogglePlannerActivityCompletion}
+              onUpdateProfile={handleUpdateProfile}
+              onAddGrade={handleAddGrade}
+            />
+          )}
+
           {activeTab === 'dashboard' && (
             <StatsDashboard
               subjects={subjects}
               sessions={sessions}
               tasks={tasks}
               streak={studyStreak}
+              exams={exams}
+              grades={grades}
             />
           )}
 
@@ -1074,6 +1106,7 @@ export default function App() {
               subjects={subjects}
               onAddActivity={handleAddPlannerActivity}
               onDeleteActivity={handleDeletePlannerActivity}
+              onUpdateActivity={handleUpdatePlannerActivity}
               onOptimizeSchedule={handleOptimizeSchedule}
             />
           )}
