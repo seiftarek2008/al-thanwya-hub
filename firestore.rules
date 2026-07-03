@@ -6,8 +6,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Allow the server (which makes unauthenticated client SDK requests) to load and save user profiles
+    // Allow the server to load and save user profiles
     match /users/{email} {
+      allow read, write: if true;
+    }
+
+    // Allow read/write for WhatsApp simulator logs
+    match /whatsappLogs/{logId} {
       allow read, write: if true;
     }
   }
