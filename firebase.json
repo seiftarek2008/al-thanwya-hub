@@ -5,18 +5,6 @@
       "rules": "firestore.rules"
     }
   ],
-  "functions": [
-    {
-      "source": "functions",
-      "codebase": "default",
-      "ignore": [
-        "node_modules",
-        ".git",
-        "firebase-debug.log",
-        "firestore-debug.log"
-      ]
-    }
-  ],
   "hosting": {
     "public": "dist",
     "ignore": [
@@ -25,46 +13,6 @@
       "**/node_modules/**"
     ],
     "rewrites": [
-      {
-        "source": "/api/auth/register",
-        "function": "register"
-      },
-      {
-        "source": "/api/auth/login",
-        "function": "login"
-      },
-      {
-        "source": "/api/auth/forgot-password",
-        "function": "forgotPassword"
-      },
-      {
-        "source": "/api/study/data",
-        "function": "getStudyData"
-      },
-      {
-        "source": "/api/study/save",
-        "function": "saveStudyData"
-      },
-      {
-        "source": "/api/user/update-profile",
-        "function": "updateProfile"
-      },
-      {
-        "source": "/api/ai/chat",
-        "function": "chat"
-      },
-      {
-        "source": "/api/whatsapp/logs",
-        "function": "whatsappLogs"
-      },
-      {
-        "source": "/api/whatsapp/test-send",
-        "function": "whatsappTestSend"
-      },
-      {
-        "source": "/api/whatsapp/simulate-auto-all",
-        "function": "whatsappSimulateAutoAll"
-      },
       {
         "source": "**",
         "destination": "/index.html"
